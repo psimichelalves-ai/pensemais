@@ -10,49 +10,73 @@
 
 <style>
 body {
+  margin:0;
   font-family: Arial;
   display:flex;
   justify-content:center;
   align-items:center;
   height:100vh;
-  margin:0;
-  text-align:center;
-  background:#f4f6f8;
+  background: linear-gradient(135deg, #1e3c72, #2a5298);
+  color:white;
 }
 
-.tela {
+.container {
   width:90%;
   max-width:400px;
+  text-align:center;
+}
+
+.card {
+  padding:25px;
+  border-radius:20px;
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
 }
 
 button {
-  padding:15px;
   width:100%;
-  margin-top:15px;
-  font-size:18px;
-  border-radius:10px;
+  padding:15px;
+  margin-top:12px;
+  border:none;
+  border-radius:12px;
+  font-size:16px;
+  font-weight:bold;
+  color:white;
+}
+
+.planejamento { background:#4A90E2; }
+.monitoramento { background:#F5A623; }
+.avaliacao { background:#7ED321; }
+.reflexao { background:#8E44AD; }
+
+input[type=range] {
+  width:100%;
 }
 </style>
 </head>
 
 <body>
 
-<div class="tela" id="app"></div>
+<div class="container">
+  <div id="app" class="card"></div>
+</div>
 
 <script>
 
 let estado = "inicio";
 let tempo = 0;
+let repetiu = false;
 
-// ---------------- RENDER ----------------
+// ---------------- TELAS ----------------
+
 function render() {
 
   if (estado === "inicio") {
     app.innerHTML = `
       <h2>📘 Início</h2>
-      <input id="assunto" placeholder="Assunto"><br>
-      <input id="tempo" type="number" placeholder="Tempo (min)"><br>
-      <button onclick="irPlanejamento()">Iniciar</button>
+      <p>Tempo de estudo: <b id="tempoLabel">10 min</b></p>
+      <input type="range" min="5" max="60" value="10" onchange="atualizarTempo(this.value)">
+      <button class="planejamento" onclick="irPlanejamento()">Iniciar</button>
     `;
   }
 
@@ -60,8 +84,8 @@ function render() {
     app.innerHTML = `
       <h2>🟦 Planejamento</h2>
       <p>Selecione uma carta</p>
-      <button onclick="scanQR()">📷 Ler Carta</button>
-      <button onclick="iniciarTimer()">Continuar</button>
+      <button onclick="scanQR()">📷 Ler QR</button>
+      <button class="planejamento" onclick="iniciarTimer()">Continuar</button>
       <div id="reader"></div>
       <p id="carta"></p>
     `;
@@ -70,17 +94,17 @@ function render() {
   if (estado === "monitoramento") {
     app.innerHTML = `
       <h2>🟨 Monitoramento</h2>
-      <button onclick="monitor('ok')">✔ Satisfatório</button>
-      <button onclick="monitor('parcial')">⚠️ Parcial</button>
-      <button onclick="monitor('ruim')">❌ Insatisfatório</button>
+      <button class="monitoramento" onclick="monitor('ok')">✔ Satisfatório</button>
+      <button class="monitoramento" onclick="monitor('parcial')">⚠️ Parcial</button>
+      <button class="monitoramento" onclick="monitor('ruim')">❌ Insatisfatório</button>
     `;
   }
 
   if (estado === "avaliacao") {
     app.innerHTML = `
       <h2>🟩 Avaliação</h2>
-      <button onclick="avaliar('sim')">✔ Atingiu</button>
-      <button onclick="avaliar('nao')">❌ Não atingiu</button>
+      <button class="avaliacao" onclick="avaliar('sim')">✔ Atingiu</button>
+      <button class="avaliacao" onclick="avaliar('nao')">❌ Não atingiu</button>
     `;
   }
 
@@ -88,21 +112,26 @@ function render() {
     app.innerHTML = `
       <h2>🧠 Reflexão</h2>
       <p id="pergunta"></p>
-      <button onclick="reiniciar()">Novo ciclo</button>
+      <button class="reflexao" onclick="reiniciar()">Novo ciclo</button>
     `;
   }
 }
 
-// ---------------- FLUXO ----------------
+// ---------------- CONTROLE ----------------
+
+function atualizarTempo(valor) {
+  document.getElementById("tempoLabel").innerText = valor + " min";
+  tempo = valor * 60000;
+}
 
 function irPlanejamento() {
-  tempo = document.getElementById("tempo").value * 60000;
   estado = "planejamento";
   render();
 }
 
+// ---------------- TIMER ----------------
+
 function iniciarTimer() {
-  estado = "espera";
   setTimeout(() => {
     estado = "monitoramento";
     render();
@@ -112,8 +141,10 @@ function iniciarTimer() {
 // ---------------- MONITORAMENTO ----------------
 
 function monitor(resp) {
-  if (resp === "parcial" || resp === "ruim") {
-    iniciarTimer(); // repete tempo
+
+  if ((resp === "parcial" || resp === "ruim") && !repetiu) {
+    repetiu = true;
+    iniciarTimer(); // repete apenas 1 vez
   } else {
     estado = "avaliacao";
     render();
@@ -130,21 +161,17 @@ function avaliar(resp) {
 
 function gerarReflexao(resp) {
 
-  let perguntas = [];
-
-  if (resp === "sim") {
-    perguntas = [
-      "Sua compreensão é profunda ou superficial?",
-      "Você consegue explicar com segurança?",
-      "Existem lacunas não percebidas?"
-    ];
-  } else {
-    perguntas = [
-      "O que você faria diferente?",
-      "O que precisa revisar primeiro?",
-      "Qual é o próximo passo?"
-    ];
-  }
+  let perguntas = resp === "sim"
+    ? [
+        "Sua compreensão é profunda ou superficial?",
+        "Você consegue explicar com segurança?",
+        "Existem lacunas não percebidas?"
+      ]
+    : [
+        "O que você faria diferente?",
+        "O que precisa revisar primeiro?",
+        "Qual é o próximo passo?"
+      ];
 
   let p = perguntas[Math.floor(Math.random() * perguntas.length)];
 
@@ -162,6 +189,7 @@ function gerarReflexao(resp) {
 // ---------------- RESET ----------------
 
 function reiniciar() {
+  repetiu = false;
   estado = "inicio";
   render();
 }

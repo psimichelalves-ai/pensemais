@@ -9,34 +9,45 @@
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
+:root {
+  --fontSize: 18px;
+}
+
 body {
   margin:0;
   font-family: Arial;
+  font-size: var(--fontSize);
+  background:#1e3c72;
   display:flex;
   justify-content:center;
   align-items:center;
   height:100vh;
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
   color:white;
 }
 
 .container {
-  width:90%;
-  max-width:400px;
+  width:100%;
+  max-width:420px;
   text-align:center;
 }
 
 .card {
-  padding:25px;
+  width:80%;
+  margin:auto;
+  padding:30px;
   border-radius:20px;
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(10px);
+  min-height:200px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
 }
 
 button {
-  width:100%;
+  width:80%;
   padding:15px;
-  margin-top:12px;
+  margin:10px auto;
+  display:block;
   border:none;
   border-radius:12px;
   font-size:16px;
@@ -49,8 +60,19 @@ button {
 .avaliacao { background:#7ED321; }
 .reflexao { background:#8E44AD; }
 
-input[type=range] {
-  width:100%;
+.progress {
+  width:80%;
+  height:6px;
+  background:#ccc;
+  margin:10px auto;
+  border-radius:5px;
+  overflow:hidden;
+}
+
+.progress-bar {
+  height:100%;
+  width:0%;
+  background:white;
 }
 </style>
 </head>
@@ -58,93 +80,137 @@ input[type=range] {
 <body>
 
 <div class="container">
-  <div id="app" class="card"></div>
+  <div id="app"></div>
 </div>
 
 <script>
 
 let estado = "inicio";
-let tempo = 0;
+let tempoTotal = 600000;
+let tempoAtual = 0;
+let intervalo;
 let repetiu = false;
 
-// ---------------- TELAS ----------------
+let score = {
+  monitoramento: "",
+  avaliacao: ""
+};
+
+// ---------------- RENDER ----------------
 
 function render() {
 
   if (estado === "inicio") {
     app.innerHTML = `
-      <h2>📘 Início</h2>
-      <p>Tempo de estudo: <b id="tempoLabel">10 min</b></p>
-      <input type="range" min="5" max="60" value="10" onchange="atualizarTempo(this.value)">
+      <h2>⚙️ Configuração</h2>
+
+      <p>Tamanho da fonte</p>
+      <input type="range" min="14" max="28" value="18"
+        onchange="document.documentElement.style.setProperty('--fontSize', this.value + 'px')">
+
+      <p>Tempo: <span id="tempoLabel">10 min</span></p>
+      <input type="range" min="1" max="20" value="5"
+        onchange="definirTempo(this.value)">
+
       <button class="planejamento" onclick="irPlanejamento()">Iniciar</button>
     `;
   }
 
-  if (estado === "planejamento") {
-    app.innerHTML = `
-      <h2>🟦 Planejamento</h2>
-      <p>Selecione uma carta</p>
-      <button onclick="scanQR()">📷 Ler QR</button>
-      <button class="planejamento" onclick="iniciarTimer()">Continuar</button>
-      <div id="reader"></div>
-      <p id="carta"></p>
-    `;
-  }
-
-  if (estado === "monitoramento") {
-    app.innerHTML = `
-      <h2>🟨 Monitoramento</h2>
-      <button class="monitoramento" onclick="monitor('ok')">✔ Satisfatório</button>
-      <button class="monitoramento" onclick="monitor('parcial')">⚠️ Parcial</button>
-      <button class="monitoramento" onclick="monitor('ruim')">❌ Insatisfatório</button>
-    `;
-  }
-
-  if (estado === "avaliacao") {
-    app.innerHTML = `
-      <h2>🟩 Avaliação</h2>
-      <button class="avaliacao" onclick="avaliar('sim')">✔ Atingiu</button>
-      <button class="avaliacao" onclick="avaliar('nao')">❌ Não atingiu</button>
-    `;
-  }
+  if (estado === "planejamento") telaCard("🟦 Planejamento", "planejamento");
+  if (estado === "monitoramento") telaCard("🟨 Monitoramento", "monitoramento");
+  if (estado === "avaliacao") telaCard("🟩 Avaliação", "avaliacao");
 
   if (estado === "reflexao") {
     app.innerHTML = `
       <h2>🧠 Reflexão</h2>
-      <p id="pergunta"></p>
-      <button class="reflexao" onclick="reiniciar()">Novo ciclo</button>
+      <div class="card reflexao">
+        <p id="pergunta"></p>
+      </div>
+      <button onclick="mostrarScore()">Continuar</button>
+    `;
+  }
+
+  if (estado === "score") {
+    app.innerHTML = `
+      <h2>🏆 Resultado</h2>
+      <p>Monitoramento: ${score.monitoramento}</p>
+      <p>Avaliação: ${score.avaliacao}</p>
+      <button onclick="reiniciar()">Novo ciclo</button>
     `;
   }
 }
 
-// ---------------- CONTROLE ----------------
+// ---------------- TELA PADRÃO ----------------
 
-function atualizarTempo(valor) {
-  document.getElementById("tempoLabel").innerText = valor + " min";
-  tempo = valor * 60000;
+function telaCard(titulo, classe) {
+  app.innerHTML = `
+    <h2>${titulo}</h2>
+
+    <div class="progress">
+      <div class="progress-bar" id="barra"></div>
+    </div>
+
+    <div class="card ${classe}" onclick="iniciarInteracao()">
+      <p id="mensagem">Clique para escolher uma carta</p>
+    </div>
+
+    <button onclick="scanQR()">📷 Ler QR</button>
+    ${estado === "monitoramento" ? `
+      <button onclick="respostaMonitoramento('ok')">✔ Satisfatório</button>
+      <button onclick="respostaMonitoramento('parcial')">⚠️ Parcial</button>
+      <button onclick="respostaMonitoramento('ruim')">❌ Insatisfatório</button>
+    ` : ""}
+
+    ${estado === "avaliacao" ? `
+      <button onclick="avaliar('sim')">✔ Atingiu</button>
+      <button onclick="avaliar('nao')">❌ Não</button>
+    ` : ""}
+  `;
 }
 
-function irPlanejamento() {
-  estado = "planejamento";
-  render();
+// ---------------- TEMPO ----------------
+
+function definirTempo(min) {
+  document.getElementById("tempoLabel").innerText = min + " min";
+  tempoTotal = min * 60000;
 }
 
-// ---------------- TIMER ----------------
+function iniciarInteracao() {
+  document.getElementById("mensagem").innerText = "";
+  iniciarTimer();
+}
 
 function iniciarTimer() {
-  setTimeout(() => {
-    estado = "monitoramento";
-    render();
-  }, tempo);
+  tempoAtual = 0;
+  clearInterval(intervalo);
+
+  intervalo = setInterval(() => {
+    tempoAtual += 100;
+    let progresso = (tempoAtual / tempoTotal) * 100;
+    document.getElementById("barra").style.width = progresso + "%";
+
+    if (tempoAtual >= tempoTotal) {
+      clearInterval(intervalo);
+
+      if (estado === "planejamento") {
+        estado = "monitoramento";
+      } else if (estado === "monitoramento") {
+        estado = "avaliacao";
+      }
+
+      render();
+    }
+  }, 100);
 }
 
 // ---------------- MONITORAMENTO ----------------
 
-function monitor(resp) {
+function respostaMonitoramento(resp) {
+  score.monitoramento = resp;
 
   if ((resp === "parcial" || resp === "ruim") && !repetiu) {
     repetiu = true;
-    iniciarTimer(); // repete apenas 1 vez
+    iniciarTimer();
   } else {
     estado = "avaliacao";
     render();
@@ -154,6 +220,7 @@ function monitor(resp) {
 // ---------------- AVALIAÇÃO ----------------
 
 function avaliar(resp) {
+  score.avaliacao = resp;
   gerarReflexao(resp);
 }
 
@@ -163,15 +230,15 @@ function gerarReflexao(resp) {
 
   let perguntas = resp === "sim"
     ? [
-        "Sua compreensão é profunda ou superficial?",
-        "Você consegue explicar com segurança?",
-        "Existem lacunas não percebidas?"
-      ]
+      "Sua compreensão é profunda ou superficial?",
+      "Você consegue explicar com segurança?",
+      "Existem lacunas não percebidas?"
+    ]
     : [
-        "O que você faria diferente?",
-        "O que precisa revisar primeiro?",
-        "Qual é o próximo passo?"
-      ];
+      "O que você faria diferente?",
+      "O que precisa revisar primeiro?",
+      "Qual é o próximo passo?"
+    ];
 
   let p = perguntas[Math.floor(Math.random() * perguntas.length)];
 
@@ -180,16 +247,22 @@ function gerarReflexao(resp) {
 
   setTimeout(() => {
     document.getElementById("pergunta").innerText = p;
-
-    let fala = new SpeechSynthesisUtterance(p);
-    speechSynthesis.speak(fala);
+    speechSynthesis.speak(new SpeechSynthesisUtterance(p));
   }, 100);
+}
+
+// ---------------- SCORE ----------------
+
+function mostrarScore() {
+  estado = "score";
+  render();
 }
 
 // ---------------- RESET ----------------
 
 function reiniciar() {
   repetiu = false;
+  score = {};
   estado = "inicio";
   render();
 }
@@ -200,20 +273,13 @@ function scanQR() {
   const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
 
   scanner.render((texto) => {
-    document.getElementById("carta").innerText = texto;
-
-    let fala = new SpeechSynthesisUtterance(texto);
-    speechSynthesis.speak(fala);
-
+    document.getElementById("mensagem").innerText = texto;
+    speechSynthesis.speak(new SpeechSynthesisUtterance(texto));
     scanner.clear();
   });
 }
 
-// ---------------- SERVICE WORKER ----------------
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js');
-}
+// ---------------- INIT ----------------
 
 render();
 

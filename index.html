@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Baralho Metacognitivo</title>
+
 <link rel="manifest" href="manifest.json">
 <script src="https://unpkg.com/html5-qrcode"></script>
 
@@ -36,11 +37,12 @@ body {
   margin:auto;
   padding:30px;
   border-radius:20px;
-  min-height:200px;
+  min-height:180px;
   display:flex;
   align-items:center;
   justify-content:center;
   text-align:center;
+  cursor:pointer;
 }
 
 button {
@@ -85,10 +87,12 @@ button {
 
 <script>
 
+// ---------------- ESTADO ----------------
+
 let estado = "inicio";
-let tempoTotal = 600000;
+let tempoTotal = 10 * 60000;
 let tempoAtual = 0;
-let intervalo;
+let intervalo = null;
 let repetiu = false;
 
 let score = {
@@ -154,7 +158,8 @@ function telaCard(titulo, classe) {
       <p id="mensagem">Clique para escolher uma carta</p>
     </div>
 
-    <button onclick="scanQR()">📷 Ler QR</button>
+    <button onclick="scanQR()">📷 Ler QR Code</button>
+
     ${estado === "monitoramento" ? `
       <button onclick="respostaMonitoramento('ok')">✔ Satisfatório</button>
       <button onclick="respostaMonitoramento('parcial')">⚠️ Parcial</button>
@@ -163,31 +168,44 @@ function telaCard(titulo, classe) {
 
     ${estado === "avaliacao" ? `
       <button onclick="avaliar('sim')">✔ Atingiu</button>
-      <button onclick="avaliar('nao')">❌ Não</button>
+      <button onclick="avaliar('nao')">❌ Não atingiu</button>
     ` : ""}
   `;
 }
 
-// ---------------- TEMPO ----------------
+// ---------------- CONTROLE ----------------
 
 function definirTempo(min) {
   document.getElementById("tempoLabel").innerText = min + " min";
   tempoTotal = min * 60000;
 }
 
+function irPlanejamento() {
+  estado = "planejamento";
+  render();
+}
+
+// ---------------- INTERAÇÃO ----------------
+
 function iniciarInteracao() {
   document.getElementById("mensagem").innerText = "";
   iniciarTimer();
 }
 
+// ---------------- TIMER ----------------
+
 function iniciarTimer() {
   tempoAtual = 0;
+
   clearInterval(intervalo);
 
   intervalo = setInterval(() => {
     tempoAtual += 100;
+
     let progresso = (tempoAtual / tempoTotal) * 100;
-    document.getElementById("barra").style.width = progresso + "%";
+    let barra = document.getElementById("barra");
+
+    if (barra) barra.style.width = progresso + "%";
 
     if (tempoAtual >= tempoTotal) {
       clearInterval(intervalo);
@@ -200,12 +218,14 @@ function iniciarTimer() {
 
       render();
     }
+
   }, 100);
 }
 
 // ---------------- MONITORAMENTO ----------------
 
 function respostaMonitoramento(resp) {
+
   score.monitoramento = resp;
 
   if ((resp === "parcial" || resp === "ruim") && !repetiu) {
@@ -232,11 +252,13 @@ function gerarReflexao(resp) {
     ? [
       "Sua compreensão é profunda ou superficial?",
       "Você consegue explicar com segurança?",
-      "Existem lacunas não percebidas?"
+      "Existem lacunas não percebidas?",
+      "Há partes ainda pouco claras?"
     ]
     : [
       "O que você faria diferente?",
       "O que precisa revisar primeiro?",
+      "O que ainda precisa aprender?",
       "Qual é o próximo passo?"
     ];
 
@@ -247,7 +269,9 @@ function gerarReflexao(resp) {
 
   setTimeout(() => {
     document.getElementById("pergunta").innerText = p;
-    speechSynthesis.speak(new SpeechSynthesisUtterance(p));
+
+    let fala = new SpeechSynthesisUtterance(p);
+    speechSynthesis.speak(fala);
   }, 100);
 }
 
@@ -262,24 +286,40 @@ function mostrarScore() {
 
 function reiniciar() {
   repetiu = false;
-  score = {};
+  score = { monitoramento: "", avaliacao: "" };
   estado = "inicio";
   render();
 }
 
-// ---------------- QR ----------------
+// ---------------- QR CODE ----------------
 
 function scanQR() {
-  const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+
+  const scanner = new Html5QrcodeScanner("reader", {
+    fps: 10,
+    qrbox: 250
+  });
 
   scanner.render((texto) => {
-    document.getElementById("mensagem").innerText = texto;
-    speechSynthesis.speak(new SpeechSynthesisUtterance(texto));
+
+    let msg = document.getElementById("mensagem");
+
+    if (msg) msg.innerText = texto;
+
+    let fala = new SpeechSynthesisUtterance(texto);
+    speechSynthesis.speak(fala);
+
     scanner.clear();
   });
 }
 
-// ---------------- INIT ----------------
+// ---------------- SERVICE WORKER ----------------
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js');
+}
+
+// ---------------- START ----------------
 
 render();
 

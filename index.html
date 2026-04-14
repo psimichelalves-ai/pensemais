@@ -3,115 +3,167 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Baralho Metacognitivo</title>
 
 <link rel="manifest" href="manifest.json">
-
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
-body {
-  font-family: Arial;
-  text-align: center;
-  background: #f4f6f8;
-}
-
-button {
-  padding: 15px;
-  margin: 10px;
-  border-radius: 10px;
-  border: none;
-  font-size: 16px;
-}
-
-.planejar { background: #4A90E2; color: white; }
-.monitorar { background: #F5A623; color: white; }
-.avaliar { background: #7ED321; color: white; }
-
-.card {
-  background: white;
-  margin: 20px;
-  padding: 20px;
-  border-radius: 15px;
-}
+body { font-family: Arial; text-align:center; padding:20px; }
+button { padding:15px; margin:10px; font-size:16px; border-radius:10px; }
+.card { background:#f4f4f4; padding:20px; margin:20px; border-radius:15px; }
 </style>
 </head>
 
 <body>
 
 <h2>🧠 Baralho Metacognitivo</h2>
-
-<div class="card">
-  <button class="planejar" onclick="registrar('planejar')">🟦 Planejar</button>
-  <button class="monitorar" onclick="registrar('monitorar')">🟨 Monitorar</button>
-  <button class="avaliar" onclick="registrar('avaliar')">🟩 Avaliar</button>
-</div>
-
-<div class="card">
-  <h3>📷 Ler QR Code</h3>
-  <div id="reader" style="width:300px;margin:auto;"></div>
-  <p id="carta"></p>
-</div>
-
-<div class="card">
-  <p>Você entendeu?</p>
-  <button onclick="responder('sim')">👍</button>
-  <button onclick="responder('parcial')">😐</button>
-  <button onclick="responder('nao')">❌</button>
-</div>
-
-<div class="card">
-  <h3>📊 Estatísticas</h3>
-  <p id="stats"></p>
-</div>
+<div id="app"></div>
 
 <script>
-let dados = JSON.parse(localStorage.getItem("dados")) || {
-  planejar:0, monitorar:0, avaliar:0,
-  sim:0, parcial:0, nao:0
-};
 
-function salvar() {
-  localStorage.setItem("dados", JSON.stringify(dados));
+let estado = "inicio";
+let tempo = 0;
+
+// ---------------- RENDER ----------------
+function render() {
+
+  if (estado === "inicio") {
+    app.innerHTML = `
+      <div class="card">
+      <h3>📘 Definir estudo</h3>
+      Assunto:<br><input id="assunto"><br><br>
+      Tempo (min):<br><input id="tempo" type="number"><br><br>
+      <button onclick="iniciar()">Iniciar</button>
+      </div>
+    `;
+  }
+
+  if (estado === "planejamento") {
+    app.innerHTML = `
+      <div class="card">
+      <h3>🟦 Planejamento</h3>
+      <p>Selecione uma carta física</p>
+      <button onclick="scanQR()">📷 Ler QR</button>
+      <button onclick="iniciarTimer()">✔ Já selecionei</button>
+      <div id="reader"></div>
+      <p id="carta"></p>
+      </div>
+    `;
+  }
+
+  if (estado === "monitoramento") {
+    app.innerHTML = `
+      <div class="card">
+      <h3>🟨 Monitoramento</h3>
+      <button onclick="respostaMonitoramento('ok')">✔ Satisfatório</button>
+      <button onclick="respostaMonitoramento('parcial')">⚠️ Parcial</button>
+      <button onclick="respostaMonitoramento('ruim')">❌ Insatisfatório</button>
+      </div>
+    `;
+  }
+
+  if (estado === "avaliacao") {
+    app.innerHTML = `
+      <div class="card">
+      <h3>🟩 Avaliação</h3>
+      <button onclick="avaliar('sim')">✔ Atingiu</button>
+      <button onclick="avaliar('parcial')">⚠️ Parcial</button>
+      <button onclick="avaliar('nao')">❌ Não</button>
+      </div>
+    `;
+  }
 }
 
-function registrar(tipo) {
-  dados[tipo]++;
-  salvar();
-  atualizar();
+// ---------------- INÍCIO ----------------
+function iniciar() {
+  tempo = document.getElementById("tempo").value * 60000;
+  estado = "planejamento";
+  render();
 }
 
-function responder(r) {
-  dados[r]++;
-  salvar();
-  atualizar();
+// ---------------- TIMER ----------------
+function iniciarTimer() {
+  alert("⏱️ Estudo iniciado");
+  setTimeout(() => {
+    estado = "monitoramento";
+    render();
+  }, tempo);
 }
 
-function atualizar() {
-  document.getElementById("stats").innerHTML = `
-  Planejar: ${dados.planejar}<br>
-  Monitorar: ${dados.monitorar}<br>
-  Avaliar: ${dados.avaliar}<br><br>
-  👍 ${dados.sim} | 😐 ${dados.parcial} | ❌ ${dados.nao}`;
+// ---------------- MONITORAMENTO ----------------
+function respostaMonitoramento(resp) {
+
+  if (resp === "parcial" || resp === "ruim") {
+    alert("⏱️ Novo ciclo de estudo");
+    iniciarTimer();
+  } else {
+    estado = "avaliacao";
+    render();
+  }
 }
 
-function onScanSuccess(texto) {
-  document.getElementById("carta").innerHTML = "📖 " + texto;
-
-  let partes = texto.split("|");
-  if(partes[0]) registrar(partes[0].toLowerCase());
+// ---------------- AVALIAÇÃO ----------------
+function avaliar(resp) {
+  reflexaoAutomatica(resp);
 }
 
-let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-scanner.render(onScanSuccess);
+// ---------------- REFLEXÃO ----------------
+function reflexaoAutomatica(resp) {
 
-atualizar();
+  let perguntas = [];
 
-// Service Worker
+  if (resp === "sim") {
+    perguntas = [
+      "Sua compreensão é profunda ou superficial?",
+      "Você consegue explicar esse conteúdo com segurança?",
+      "Existem partes que ainda não estão claras?",
+      "Pode haver lacunas que você não percebeu?"
+    ];
+  } else {
+    perguntas = [
+      "O que você faria diferente para compreender melhor?",
+      "O que precisa revisar primeiro?",
+      "O que ainda precisa aprender?",
+      "Qual é o próximo passo para avançar?"
+    ];
+  }
+
+  let pergunta = perguntas[Math.floor(Math.random() * perguntas.length)];
+
+  // voz
+  let fala = new SpeechSynthesisUtterance(pergunta);
+  speechSynthesis.speak(fala);
+
+  alert("🧠 Reflexão:\n\n" + pergunta);
+
+  estado = "inicio";
+  render();
+}
+
+// ---------------- QR + VOZ ----------------
+function scanQR() {
+
+  const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+
+  scanner.render((texto) => {
+
+    document.getElementById("carta").innerText = texto;
+
+    let fala = new SpeechSynthesisUtterance(texto);
+    speechSynthesis.speak(fala);
+
+    scanner.clear();
+  });
+}
+
+// ---------------- SERVICE WORKER ----------------
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('service-worker.js');
 }
+
+render();
+
 </script>
 
 </body>

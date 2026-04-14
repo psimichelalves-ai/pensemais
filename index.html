@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Baralho Metacognitivo2</title>
+<title>Baralho Metacognitivo</title>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 
@@ -38,14 +38,14 @@ body {
 }
 
 button {
-  width:80%;
-  padding:15px;
-  margin:10px auto;
-  display:block;
-  border:none;
-  border-radius:10px;
-  font-weight:bold;
-  color:white;
+    width: 80%;
+    padding: 15px;
+    margin: 10px auto;
+    display: block;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    color: #1e3c72;
 }
 
 .planejamento { background:#4A90E2; }
@@ -76,16 +76,17 @@ button {
 // ---------------- ESTADO ----------------
 
 let estado = "inicio";
-let tempoTotal = parseInt(localStorage.getItem("tempo")) || 600000;
+
+let tempoTotal = parseInt(localStorage.getItem("tempo")) || (5 * 60000);
 let vozAtiva = localStorage.getItem("voz") === "true";
 
 let tempoAtual = 0;
 let intervalo;
 
-let tentativa = 0;
-let cardIniciado = false;
-
 let score = { monitoramento:"", avaliacao:"" };
+
+// 🔴 NOVO CONTROLE IMPORTANTE
+let podeIniciarTimer = false;
 
 // ---------------- VOZ ----------------
 
@@ -108,17 +109,18 @@ if(estado==="inicio"){
     </button>
 
     <p>Fonte</p>
-    <input type="range" min="14" max="28" value="${localStorage.getItem('fonte')||18}"
-    onchange="setFonte(this.value)">
+    <input type="range" min="14" max="28"
+      value="${localStorage.getItem('fonte')||18}"
+      onchange="setFonte(this.value)">
 
     <p>Tempo: <span id="tempoLabel">${tempoTotal/60000} min</span></p>
-    <input type="range" min="1" max="20" value="${tempoTotal/60000}"
-    onchange="setTempo(this.value)">
+    <input type="range" min="1" max="20"
+      value="${tempoTotal/60000}"
+      onchange="setTempo(this.value)">
 
     <button class="planejamento" onclick="irPlanejamento()">Iniciar</button>
   `;
-
-  falar("Tela de configuração");
+  falar("Metacogni. Tela de configuração");
 }
 
 else if(["planejamento","monitoramento","avaliacao"].includes(estado)){
@@ -171,8 +173,6 @@ function setTempo(v){
 
 function irPlanejamento(){
   estado="planejamento";
-  tentativa=0;
-  cardIniciado=false;
   render();
 }
 
@@ -181,16 +181,31 @@ function irPlanejamento(){
 function telaCard(){
 
   let cor = estado;
+  let cardFalar = "Escolha uma carta de Planejamento.";
+  let cardTitulo = "Planejamento";
+  
+  if (estado==="monitoramento"){
+    cardFalar = "Escolha uma carta de Monitoramento.";
+    cardTitulo = "Monitoramento";
+  }
+    
+  if (estado==="avaliacao") {
+    cardFalar = "Escolha uma carta de Avaliação.";
+    cardTitulo = "Avaliação";
+  }
+
+  // 🔴 LIBERA clique do card
+  podeIniciarTimer = true;
 
   app.innerHTML=`
-    <h2>${estado.toUpperCase()}</h2>
+    <h2>${cardTitulo.toUpperCase()}</h2>
 
     <div class="progress">
       <div class="bar" id="barra"></div>
     </div>
 
     <div class="card ${cor}" onclick="iniciarCard()">
-      <p id="msg">Clique para escolher uma carta</p>
+      <p id="msg">Clique após a leitura da carta</p>
     </div>
 
     <button onclick="scanQR()">📷 Ler QR</button>
@@ -206,18 +221,22 @@ function telaCard(){
       <button onclick="avaliar('nao')">❌ Não</button>
     `:""}
 
-    <button id="prox" onclick="proximo()" disabled>➡️ Próximo</button>
+    <button onclick="proximo()">➡️ Próximo</button>
   `;
 
-  falar(estado);
+  falar(cardFalar);
 }
 
 // ---------------- CARD START ----------------
 
 function iniciarCard(){
-  document.getElementById("msg").innerText="";
-  cardIniciado=true;
+
+  if(!podeIniciarTimer) return;
+
+  document.getElementById("msg").innerText="Estudar...";
   iniciarTimer();
+
+  podeIniciarTimer = false;
 }
 
 // ---------------- TIMER ----------------
@@ -228,6 +247,7 @@ function iniciarTimer(){
   clearInterval(intervalo);
 
   intervalo=setInterval(()=>{
+
     tempoAtual+=100;
 
     let p=(tempoAtual/tempoTotal)*100;
@@ -243,52 +263,33 @@ function iniciarTimer(){
 // ---------------- RESPOSTAS ----------------
 
 function responder(resp){
-
-  if(estado==="planejamento"){
-    tentativa++;
-  }
-
-  if(estado==="monitoramento"){
-    score.monitoramento = resp;
-  }
-
-  if(resp==="ok"){
-    liberarProximo();
-  } else {
-    iniciarTimer(); // reinicia tempo
-    liberarProximo();
-  }
+  score.monitoramento = resp;
+  iniciarTimer();
 }
 
 // ---------------- AVALIAÇÃO ----------------
 
 function avaliar(resp){
   score.avaliacao = resp;
-  liberarProximo();
 }
 
-// ---------------- CONTROLE ----------------
-
-function liberarProximo(){
-
-  let btn = document.getElementById("prox");
-
-  if(estado==="planejamento"){
-    if(tentativa >= 2){
-      btn.disabled = false;
-    }
-  } else {
-    btn.disabled = false;
-  }
-}
+// ---------------- PRÓXIMO ----------------
 
 function proximo(){
+
+  clearInterval(intervalo);
+
+  tempoAtual = 0;
+  if(document.getElementById("barra")){
+    document.getElementById("barra").style.width = "0%";
+  }
+
+  podeIniciarTimer = true;
 
   if(estado==="planejamento") estado="monitoramento";
   else if(estado==="monitoramento") estado="avaliacao";
   else if(estado==="avaliacao") estado="reflexao";
 
-  cardIniciado=false;
   render();
 }
 
@@ -316,9 +317,7 @@ function reiniciar(){
 // ---------------- QR ----------------
 
 function scanQR(){
-
   const scanner=new Html5QrcodeScanner("reader",{fps:10,qrbox:250});
-
   scanner.render(txt=>{
     document.getElementById("msg").innerText=txt;
     falar(txt);

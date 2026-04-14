@@ -3,22 +3,41 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Baralho Metacognitivo</title>
 
+<title>Baralho Metacognitivo</title>
 <link rel="manifest" href="manifest.json">
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
-body { font-family: Arial; text-align:center; padding:20px; }
-button { padding:15px; margin:10px; font-size:16px; border-radius:10px; }
-.card { background:#f4f4f4; padding:20px; margin:20px; border-radius:15px; }
+body {
+  font-family: Arial;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  margin:0;
+  text-align:center;
+  background:#f4f6f8;
+}
+
+.tela {
+  width:90%;
+  max-width:400px;
+}
+
+button {
+  padding:15px;
+  width:100%;
+  margin-top:15px;
+  font-size:18px;
+  border-radius:10px;
+}
 </style>
 </head>
 
 <body>
 
-<h2>🧠 Baralho Metacognitivo</h2>
-<div id="app"></div>
+<div class="tela" id="app"></div>
 
 <script>
 
@@ -30,61 +49,60 @@ function render() {
 
   if (estado === "inicio") {
     app.innerHTML = `
-      <div class="card">
-      <h3>📘 Definir estudo</h3>
-      Assunto:<br><input id="assunto"><br><br>
-      Tempo (min):<br><input id="tempo" type="number"><br><br>
-      <button onclick="iniciar()">Iniciar</button>
-      </div>
+      <h2>📘 Início</h2>
+      <input id="assunto" placeholder="Assunto"><br>
+      <input id="tempo" type="number" placeholder="Tempo (min)"><br>
+      <button onclick="irPlanejamento()">Iniciar</button>
     `;
   }
 
   if (estado === "planejamento") {
     app.innerHTML = `
-      <div class="card">
-      <h3>🟦 Planejamento</h3>
-      <p>Selecione uma carta física</p>
-      <button onclick="scanQR()">📷 Ler QR</button>
-      <button onclick="iniciarTimer()">✔ Já selecionei</button>
+      <h2>🟦 Planejamento</h2>
+      <p>Selecione uma carta</p>
+      <button onclick="scanQR()">📷 Ler Carta</button>
+      <button onclick="iniciarTimer()">Continuar</button>
       <div id="reader"></div>
       <p id="carta"></p>
-      </div>
     `;
   }
 
   if (estado === "monitoramento") {
     app.innerHTML = `
-      <div class="card">
-      <h3>🟨 Monitoramento</h3>
-      <button onclick="respostaMonitoramento('ok')">✔ Satisfatório</button>
-      <button onclick="respostaMonitoramento('parcial')">⚠️ Parcial</button>
-      <button onclick="respostaMonitoramento('ruim')">❌ Insatisfatório</button>
-      </div>
+      <h2>🟨 Monitoramento</h2>
+      <button onclick="monitor('ok')">✔ Satisfatório</button>
+      <button onclick="monitor('parcial')">⚠️ Parcial</button>
+      <button onclick="monitor('ruim')">❌ Insatisfatório</button>
     `;
   }
 
   if (estado === "avaliacao") {
     app.innerHTML = `
-      <div class="card">
-      <h3>🟩 Avaliação</h3>
+      <h2>🟩 Avaliação</h2>
       <button onclick="avaliar('sim')">✔ Atingiu</button>
-      <button onclick="avaliar('parcial')">⚠️ Parcial</button>
-      <button onclick="avaliar('nao')">❌ Não</button>
-      </div>
+      <button onclick="avaliar('nao')">❌ Não atingiu</button>
+    `;
+  }
+
+  if (estado === "reflexao") {
+    app.innerHTML = `
+      <h2>🧠 Reflexão</h2>
+      <p id="pergunta"></p>
+      <button onclick="reiniciar()">Novo ciclo</button>
     `;
   }
 }
 
-// ---------------- INÍCIO ----------------
-function iniciar() {
+// ---------------- FLUXO ----------------
+
+function irPlanejamento() {
   tempo = document.getElementById("tempo").value * 60000;
   estado = "planejamento";
   render();
 }
 
-// ---------------- TIMER ----------------
 function iniciarTimer() {
-  alert("⏱️ Estudo iniciado");
+  estado = "espera";
   setTimeout(() => {
     estado = "monitoramento";
     render();
@@ -92,11 +110,10 @@ function iniciarTimer() {
 }
 
 // ---------------- MONITORAMENTO ----------------
-function respostaMonitoramento(resp) {
 
+function monitor(resp) {
   if (resp === "parcial" || resp === "ruim") {
-    alert("⏱️ Novo ciclo de estudo");
-    iniciarTimer();
+    iniciarTimer(); // repete tempo
   } else {
     estado = "avaliacao";
     render();
@@ -104,50 +121,57 @@ function respostaMonitoramento(resp) {
 }
 
 // ---------------- AVALIAÇÃO ----------------
+
 function avaliar(resp) {
-  reflexaoAutomatica(resp);
+  gerarReflexao(resp);
 }
 
 // ---------------- REFLEXÃO ----------------
-function reflexaoAutomatica(resp) {
+
+function gerarReflexao(resp) {
 
   let perguntas = [];
 
   if (resp === "sim") {
     perguntas = [
       "Sua compreensão é profunda ou superficial?",
-      "Você consegue explicar esse conteúdo com segurança?",
-      "Existem partes que ainda não estão claras?",
-      "Pode haver lacunas que você não percebeu?"
+      "Você consegue explicar com segurança?",
+      "Existem lacunas não percebidas?"
     ];
   } else {
     perguntas = [
-      "O que você faria diferente para compreender melhor?",
+      "O que você faria diferente?",
       "O que precisa revisar primeiro?",
-      "O que ainda precisa aprender?",
-      "Qual é o próximo passo para avançar?"
+      "Qual é o próximo passo?"
     ];
   }
 
-  let pergunta = perguntas[Math.floor(Math.random() * perguntas.length)];
+  let p = perguntas[Math.floor(Math.random() * perguntas.length)];
 
-  // voz
-  let fala = new SpeechSynthesisUtterance(pergunta);
-  speechSynthesis.speak(fala);
+  estado = "reflexao";
+  render();
 
-  alert("🧠 Reflexão:\n\n" + pergunta);
+  setTimeout(() => {
+    document.getElementById("pergunta").innerText = p;
 
+    let fala = new SpeechSynthesisUtterance(p);
+    speechSynthesis.speak(fala);
+  }, 100);
+}
+
+// ---------------- RESET ----------------
+
+function reiniciar() {
   estado = "inicio";
   render();
 }
 
-// ---------------- QR + VOZ ----------------
-function scanQR() {
+// ---------------- QR ----------------
 
+function scanQR() {
   const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
 
   scanner.render((texto) => {
-
     document.getElementById("carta").innerText = texto;
 
     let fala = new SpeechSynthesisUtterance(texto);
@@ -158,6 +182,7 @@ function scanQR() {
 }
 
 // ---------------- SERVICE WORKER ----------------
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('service-worker.js');
 }

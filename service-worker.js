@@ -1,4 +1,4 @@
-const CACHE = "pensemais";
+const CACHE = "metacogni";
 
 self.addEventListener("install", e => {
   e.waitUntil(

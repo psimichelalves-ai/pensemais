@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Baralho Metacognitivo</title>
+
+<link rel="manifest" href="manifest.json">
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+body {
+  font-family: Arial;
+  text-align: center;
+  background: #f4f6f8;
+}
+
+button {
+  padding: 15px;
+  margin: 10px;
+  border-radius: 10px;
+  border: none;
+  font-size: 16px;
+}
+
+.planejar { background: #4A90E2; color: white; }
+.monitorar { background: #F5A623; color: white; }
+.avaliar { background: #7ED321; color: white; }
+
+.card {
+  background: white;
+  margin: 20px;
+  padding: 20px;
+  border-radius: 15px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🧠 Baralho Metacognitivo</h2>
+
+<div class="card">
+  <button class="planejar" onclick="registrar('planejar')">🟦 Planejar</button>
+  <button class="monitorar" onclick="registrar('monitorar')">🟨 Monitorar</button>
+  <button class="avaliar" onclick="registrar('avaliar')">🟩 Avaliar</button>
+</div>
+
+<div class="card">
+  <h3>📷 Ler QR Code</h3>
+  <div id="reader" style="width:300px;margin:auto;"></div>
+  <p id="carta"></p>
+</div>
+
+<div class="card">
+  <p>Você entendeu?</p>
+  <button onclick="responder('sim')">👍</button>
+  <button onclick="responder('parcial')">😐</button>
+  <button onclick="responder('nao')">❌</button>
+</div>
+
+<div class="card">
+  <h3>📊 Estatísticas</h3>
+  <p id="stats"></p>
+</div>
+
+<script>
+let dados = JSON.parse(localStorage.getItem("dados")) || {
+  planejar:0, monitorar:0, avaliar:0,
+  sim:0, parcial:0, nao:0
+};
+
+function salvar() {
+  localStorage.setItem("dados", JSON.stringify(dados));
+}
+
+function registrar(tipo) {
+  dados[tipo]++;
+  salvar();
+  atualizar();
+}
+
+function responder(r) {
+  dados[r]++;
+  salvar();
+  atualizar();
+}
+
+function atualizar() {
+  document.getElementById("stats").innerHTML = `
+  Planejar: ${dados.planejar}<br>
+  Monitorar: ${dados.monitorar}<br>
+  Avaliar: ${dados.avaliar}<br><br>
+  👍 ${dados.sim} | 😐 ${dados.parcial} | ❌ ${dados.nao}`;
+}
+
+function onScanSuccess(texto) {
+  document.getElementById("carta").innerHTML = "📖 " + texto;
+
+  let partes = texto.split("|");
+  if(partes[0]) registrar(partes[0].toLowerCase());
+}
+
+let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+scanner.render(onScanSuccess);
+
+atualizar();
+
+// Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js');
+}
+</script>
+
+</body>
+</html>

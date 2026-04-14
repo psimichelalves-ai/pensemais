@@ -4,9 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Baralho Metacognitivo1</title>
+<title>Baralho Metacognitivo</title>
 
-<link rel="manifest" href="manifest.json">
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <style>
@@ -17,11 +16,11 @@ body {
   font-family: Arial;
   font-size: var(--fontSize);
   background:#1e3c72;
+  color:white;
   display:flex;
   justify-content:center;
   align-items:center;
   height:100vh;
-  color:white;
 }
 
 .container { width:100%; max-width:420px; text-align:center; }
@@ -31,11 +30,10 @@ body {
   margin:auto;
   padding:30px;
   border-radius:20px;
-  min-height:180px;
+  min-height:160px;
   display:flex;
   align-items:center;
   justify-content:center;
-  text-align:center;
   cursor:pointer;
 }
 
@@ -45,7 +43,7 @@ button {
   margin:10px auto;
   display:block;
   border:none;
-  border-radius:12px;
+  border-radius:10px;
   font-weight:bold;
   color:white;
 }
@@ -75,20 +73,26 @@ button {
 
 <script>
 
-let estado = "inicio";
-let tempoTotal = localStorage.getItem("tempo") || 5 * 60000;
-let repetiu = false;
-let tentativaPlanejamento = 0;
+// ---------------- ESTADO ----------------
 
-let intervalo;
+let estado = "inicio";
+let tempoTotal = parseInt(localStorage.getItem("tempo")) || 600000;
+let vozAtiva = localStorage.getItem("voz") === "true";
+
 let tempoAtual = 0;
+let intervalo;
+
+let tentativa = 0;
+let cardIniciado = false;
 
 let score = { monitoramento:"", avaliacao:"" };
 
 // ---------------- VOZ ----------------
 
-function falar(texto){
-  speechSynthesis.speak(new SpeechSynthesisUtterance(texto));
+function falar(txt){
+  if(!vozAtiva) return;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(txt));
 }
 
 // ---------------- RENDER ----------------
@@ -99,7 +103,9 @@ if(estado==="inicio"){
   app.innerHTML = `
     <h2>⚙️ Configuração</h2>
 
-    <button onclick="lerTela()">🔊 Ouvir tela</button>
+    <button onclick="toggleVoz()">
+      🔊 Leitura: ${vozAtiva ? "Ativada" : "Desativada"}
+    </button>
 
     <p>Fonte</p>
     <input type="range" min="14" max="28" value="${localStorage.getItem('fonte')||18}"
@@ -111,25 +117,27 @@ if(estado==="inicio"){
 
     <button class="planejamento" onclick="irPlanejamento()">Iniciar</button>
   `;
+
+  falar("Tela de configuração");
 }
 
-if(["planejamento","monitoramento","avaliacao"].includes(estado)){
+else if(["planejamento","monitoramento","avaliacao"].includes(estado)){
   telaCard();
 }
 
-if(estado==="reflexao"){
+else if(estado==="reflexao"){
   let p = gerarPergunta();
 
   app.innerHTML=`
     <h2>🧠 Reflexão</h2>
     <div class="card reflexao">${p}</div>
-    <button onclick="mostrarScore()">Continuar</button>
+    <button onclick="irScore()">Continuar</button>
   `;
 
   falar(p);
 }
 
-if(estado==="score"){
+else if(estado==="score"){
   app.innerHTML=`
     <h2>🏆 Resultado</h2>
     <p>Monitoramento: ${score.monitoramento}</p>
@@ -142,8 +150,10 @@ if(estado==="score"){
 
 // ---------------- CONFIG ----------------
 
-function lerTela(){
-  falar("Configuração. Ajuste fonte e tempo de estudo.");
+function toggleVoz(){
+  vozAtiva = !vozAtiva;
+  localStorage.setItem("voz", vozAtiva);
+  render();
 }
 
 function setFonte(v){
@@ -153,15 +163,16 @@ function setFonte(v){
 
 function setTempo(v){
   tempoTotal = v * 60000;
-  document.getElementById("tempoLabel").innerText = v+" min";
   localStorage.setItem("tempo", tempoTotal);
+  document.getElementById("tempoLabel").innerText = v+" min";
 }
 
 // ---------------- FLUXO ----------------
 
 function irPlanejamento(){
   estado="planejamento";
-  tentativaPlanejamento=0;
+  tentativa=0;
+  cardIniciado=false;
   render();
 }
 
@@ -174,7 +185,9 @@ function telaCard(){
   app.innerHTML=`
     <h2>${estado.toUpperCase()}</h2>
 
-    <div class="progress"><div class="bar" id="barra"></div></div>
+    <div class="progress">
+      <div class="bar" id="barra"></div>
+    </div>
 
     <div class="card ${cor}" onclick="iniciarCard()">
       <p id="msg">Clique para escolher uma carta</p>
@@ -183,9 +196,9 @@ function telaCard(){
     <button onclick="scanQR()">📷 Ler QR</button>
 
     ${estado==="monitoramento" ? `
-      <button onclick="monitor('ok')">✔ Satisfatório</button>
-      <button onclick="monitor('parcial')">⚠️ Parcial</button>
-      <button onclick="monitor('ruim')">❌ Insatisfatório</button>
+      <button onclick="responder('ok')">✔ Satisfatório</button>
+      <button onclick="responder('parcial')">⚠️ Parcial</button>
+      <button onclick="responder('ruim')">❌ Insatisfatório</button>
     `:""}
 
     ${estado==="avaliacao" ? `
@@ -193,23 +206,30 @@ function telaCard(){
       <button onclick="avaliar('nao')">❌ Não</button>
     `:""}
 
-    <button id="btnProx" style="display:none" onclick="proximo()">➡️ Próximo</button>
+    <button id="prox" onclick="proximo()" disabled>➡️ Próximo</button>
   `;
+
+  falar(estado);
+}
+
+// ---------------- CARD START ----------------
+
+function iniciarCard(){
+  document.getElementById("msg").innerText="";
+  cardIniciado=true;
+  iniciarTimer();
 }
 
 // ---------------- TIMER ----------------
 
-function iniciarCard(){
-  document.getElementById("msg").innerText="";
-  iniciarTimer();
-}
-
 function iniciarTimer(){
+
   tempoAtual=0;
   clearInterval(intervalo);
 
   intervalo=setInterval(()=>{
     tempoAtual+=100;
+
     let p=(tempoAtual/tempoTotal)*100;
     document.getElementById("barra").style.width=p+"%";
 
@@ -220,43 +240,45 @@ function iniciarTimer(){
   },100);
 }
 
-// ---------------- MONITORAMENTO ----------------
+// ---------------- RESPOSTAS ----------------
 
-function monitor(resp){
-
-  score.monitoramento=resp;
+function responder(resp){
 
   if(estado==="planejamento"){
-    tentativaPlanejamento++;
+    tentativa++;
   }
 
-  if((resp==="parcial"||resp==="ruim") && !repetiu){
-    repetiu=true;
-    iniciarTimer();
+  if(estado==="monitoramento"){
+    score.monitoramento = resp;
+  }
+
+  if(resp==="ok"){
+    liberarProximo();
   } else {
-    mostrarProximo();
+    iniciarTimer(); // reinicia tempo
+    liberarProximo();
   }
 }
 
 // ---------------- AVALIAÇÃO ----------------
 
 function avaliar(resp){
-  score.avaliacao=resp;
-  mostrarProximo();
+  score.avaliacao = resp;
+  liberarProximo();
 }
 
 // ---------------- CONTROLE ----------------
 
-function mostrarProximo(){
+function liberarProximo(){
 
-  let btn=document.getElementById("btnProx");
+  let btn = document.getElementById("prox");
 
   if(estado==="planejamento"){
-    if(tentativaPlanejamento>=1 || score.monitoramento==="ok"){
-      btn.style.display="block";
+    if(tentativa >= 2){
+      btn.disabled = false;
     }
   } else {
-    btn.style.display="block";
+    btn.disabled = false;
   }
 }
 
@@ -266,27 +288,27 @@ function proximo(){
   else if(estado==="monitoramento") estado="avaliacao";
   else if(estado==="avaliacao") estado="reflexao";
 
-  repetiu=false;
+  cardIniciado=false;
   render();
 }
 
 // ---------------- REFLEXÃO ----------------
 
 function gerarPergunta(){
-  let arr = score.avaliacao==="sim"
-    ? ["Você realmente dominou o conteúdo?","Há lacunas?"]
-    : ["O que melhorar?","Qual próximo passo?"];
-
-  return arr[Math.floor(Math.random()*arr.length)];
+  return score.avaliacao==="sim"
+    ? "Sua compreensão é profunda?"
+    : "O que você precisa melhorar?";
 }
 
-// ---------------- RESET ----------------
+// ---------------- FINAL ----------------
 
-function mostrarScore(){ estado="score"; render(); }
+function irScore(){
+  estado="score";
+  render();
+}
 
 function reiniciar(){
   estado="inicio";
-  repetiu=false;
   score={monitoramento:"",avaliacao:""};
   render();
 }
@@ -294,7 +316,9 @@ function reiniciar(){
 // ---------------- QR ----------------
 
 function scanQR(){
+
   const scanner=new Html5QrcodeScanner("reader",{fps:10,qrbox:250});
+
   scanner.render(txt=>{
     document.getElementById("msg").innerText=txt;
     falar(txt);
@@ -302,7 +326,7 @@ function scanQR(){
   });
 }
 
-// ---------------- INIT ----------------
+// ---------------- START ----------------
 
 render();
 

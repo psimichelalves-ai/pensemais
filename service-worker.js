@@ -1,10 +1,8 @@
-const CACHE_NAME = "pensemais";
+const CACHE = "pensemais";
 
 self.addEventListener("install", e => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(["./"]);
-    })
+    caches.open(CACHE).then(cache => cache.addAll(["./"]))
   );
 });
 
